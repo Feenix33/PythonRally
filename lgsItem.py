@@ -11,6 +11,8 @@ xProcess FEA TF US
 xOutput the hierarchy
 xUser Story and defect processing
 xGeneric query
+xQuery from input file
+xInput file with ignore
 Restructure output to have separate modules to write rather than as you go
 Get tasks if asked for user stories and defects
 Add excel output
@@ -28,10 +30,7 @@ tasks or not for all or only explicit us/de
 """
 
 
-#gTeamFeatures = ["TF19620", "TF20195"]
-gQueryList = ["US335766"]
-gQueryList = ["US335766", "DE74070", "TF20195"]
-gQueryList = ["FEA9982"]
+gQueryList = []
 
 gFilename = 'lgsout.csv'
 gFieldnames = ['FormattedID', 'Name', 'PlanEstimate', 'TeamFeature.FormattedID', 'TeamFeature.Name',
@@ -109,34 +108,49 @@ def processDE(instRally, defectID, writer):
     for defect in response:
         processUserStory(writer, defect)
 
+def tokens(fileobj):
+    for line in fileobj:
+        if line[0] != '#':
+            for word in line.split():
+                yield word
+
 def main():
-    writer = workbk = None
-    print('Create File...')
-    writer = openCSV( 'lgsout.csv' )
-    #workbk = Workbook()
-    #wsA = workbk.active
 
-    #writeHeader(writer, wsA)
-    writeHeader(writer)
+    try:
+        infile = open(sys.argv[1], 'r')
+        gQueryList = tokens(infile)
 
-    #if workbk: workbk.save('lgsout.xlsx')
+        writer = workbk = None
+        print('Create File...')
+        writer = openCSV( 'lgsout.csv' )
+        #workbk = Workbook()
+        #wsA = workbk.active
 
-    print('Logging in...')
-    rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
+        #writeHeader(writer, wsA)
+        writeHeader(writer)
 
-    print('Query execution...')
+        #if workbk: workbk.save('lgsout.xlsx')
 
-    for queryItem in gQueryList:
-        if queryItem[:2] == "FE":
-            processFEA(rally, queryItem, writer)
-        elif queryItem[:2] == "TF":
-            processTF(rally, queryItem, writer)
-        elif queryItem[:2] == "US":
-            processUS(rally, queryItem, writer)
-        elif queryItem[:2] == "DE":
-            processDE(rally, queryItem, writer)
-        else:
-            print ("Error query for " + queryItem)
+        print('Logging in...')
+        rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
+
+        print('Query execution...')
+
+        for queryItem in gQueryList:
+            if queryItem[:2] == "FE":
+                processFEA(rally, queryItem, writer)
+            elif queryItem[:2] == "TF":
+                processTF(rally, queryItem, writer)
+            elif queryItem[:2] == "US":
+                processUS(rally, queryItem, writer)
+            elif queryItem[:2] == "DE":
+                processDE(rally, queryItem, writer)
+            else:
+                print ("Error query for " + queryItem)
+    except IOError:
+        print ("IOError: ", sys.argv[0], "<input file>")
+    except IndexError:
+        print ("IndexError: ", sys.argv[0], "<input file>")
     print('Fini')
 
 
