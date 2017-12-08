@@ -23,10 +23,16 @@ from openpyxl import Workbook
 .should globals be in a structure
 .excel page per FEA
 .Consolidate query routines
+.Commnand line switches
 
  Get tasks if asked for user stories and defects
- Commnand line switches
  ini/yaml config file
+---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
+ Error handling
+   search not found
+   files not opening
+   incorrect ini
+   unknown flags
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 .input file
 .screen status or silent
@@ -47,7 +53,7 @@ gPPMFieldnames = ['FormattedID', 'Name', 'LeafStoryPlanEstimateTotal', 'Parent.F
 
 class theConfig:
     def __init__(self):
-        self.outToConsole = False
+        self.outToConsole = True
         self.writeCSV = True
         self.writeExcel = True
         self.fnameCSV = "lgsItem.csv"
@@ -69,11 +75,11 @@ def getattrError(n, attr):
     except AttributeError:
         dot = attr.find(".")
         if dot == -1 :
-            return gConfig.strNoExist
+            return str(gConfig.strNoExist)
         try:
             return getattr( getattr(n, attr[:dot]), attr[(dot+1):])
         except AttributeError:
-            return gConfig.strNoExist
+            return str(gConfig.strNoExist)
 
 def processFEA(instRally, feaID):
     entityName = 'PortfolioItem'
@@ -161,11 +167,38 @@ def consoleStatus(message):
 
 def buildInputParser(parser):
     #parser.add_argument("-v", "--verbose", action="store_true", help="Print status messages to console")
-    parser.add_argument("infile", help="Input file to process")
+    ##parser.add_argument("infile", default='in.txt', nargs='?', help="Input file to process")
+    #for optional multiple use
+    # add-argument('baz',default=[], nargs='*')
+    parser.add_argument("-i", "--infile", type=argparse.FileType('r'), default='in.txt',
+            help="input file with search parameters")
+    parser.add_argument("-q", "--quiet", action="store_true", help="No console messages")
+    parser.add_argument("-c", "--csv", nargs='?', const=1, type=str, default='out.csv', help="Write a .csv output")
+    parser.add_argument("-x", "--xl", nargs='?', const=1, type=str, default='out.xlsx', help="Write a Excel output")
+    parser.add_argument("--noxl", action='store_true', default=False, help="Suppress Excel output")
+    parser.add_argument("--nocsv", action='store_true', default=False, help="Suppress csv output")
+    parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
+    parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
 
 def mapArgsserToGlobal(args):
-    #gConfig.outToConsole = args.verbose
-    gConfig.fnameInput = arg.infile
+    gConfig.outToConsole = not args.quiet
+    gConfig.fnameInput = args.infile.name
+    gConfig.writeExcel = True
+    gConfig.writeCSV = True
+
+    if args.xl == 1: gConfig.fnameExcel = "lgsItem.xlsx"
+    else: gConfig.fnameExcel = args.xl
+
+    if args.csv == 1: gConfig.fnameCSV = "lgsItem.csv"
+    else: gConfig.fnameCSV = args.csv
+
+    if args.noxl: gConfig.writeExcel = False
+    if args.nocsv: gConfig.writeCSV = False
+
+    gConfig.strNoExist = args.nastring[0]
+    gConfig.fnameExceloutType = args.xltype
+    #print (args)
+
 
 def main():
     inParser = argparse.ArgumentParser()
@@ -176,11 +209,6 @@ def main():
     dataHR = []
     queryList = []
 
-    #try:
-    #    finputfile = sys.argv[1]
-    #except IndexError:
-    #    finputfile = gConfig.fnameInput
-    #    consoleStatus ("Trying to use " + str(finputfile))
 
     finputfile = gConfig.fnameInput
     try:
