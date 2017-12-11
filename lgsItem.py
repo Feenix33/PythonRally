@@ -33,6 +33,7 @@ from openpyxl import Workbook
    files not opening
    incorrect ini
    unknown flags
+   upper/lowercase
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 .input file
 .screen status or silent
@@ -61,6 +62,7 @@ class theConfig:
         self.fnameExceloutType = 0
         self.fnameInput = 'in.txt'
         self.strNoExist = "--"
+        self.useInput = True
 
 
 gConfig = theConfig()
@@ -166,12 +168,9 @@ def consoleStatus(message):
     if gConfig.outToConsole: print (message)
 
 def buildInputParser(parser):
-    #parser.add_argument("-v", "--verbose", action="store_true", help="Print status messages to console")
-    ##parser.add_argument("infile", default='in.txt', nargs='?', help="Input file to process")
-    #for optional multiple use
-    # add-argument('baz',default=[], nargs='*')
     parser.add_argument("-i", "--infile", type=argparse.FileType('r'), default='in.txt',
             help="input file with search parameters")
+    parser.add_argument("-noi", "--noinput", default=False, action="store_true", help="No input file")
     parser.add_argument("-q", "--quiet", action="store_true", help="No console messages")
     parser.add_argument("-c", "--csv", nargs='?', const=1, type=str, default='out.csv', help="Write a .csv output")
     parser.add_argument("-x", "--xl", nargs='?', const=1, type=str, default='out.xlsx', help="Write a Excel output")
@@ -179,8 +178,10 @@ def buildInputParser(parser):
     parser.add_argument("--nocsv", action='store_true', default=False, help="Suppress csv output")
     parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
     parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
+    parser.add_argument('baz',default=[], nargs='*', help="Parameters to search for")
 
 def mapArgsserToGlobal(args):
+    #convert the passed arguments to the global configuration and return the search tokens
     gConfig.outToConsole = not args.quiet
     gConfig.fnameInput = args.infile.name
     gConfig.writeExcel = True
@@ -197,49 +198,50 @@ def mapArgsserToGlobal(args):
 
     gConfig.strNoExist = args.nastring[0]
     gConfig.fnameExceloutType = args.xltype
+    gConfig.useInput = not args.noinput
     #print (args)
+    return args.baz
 
 
 def main():
-    inParser = argparse.ArgumentParser()
-    buildInputParser(inParser)
-    args = inParser.parse_args()
-    mapArgsserToGlobal(args)
-
     dataHR = []
     queryList = []
 
+    inParser = argparse.ArgumentParser()
+    buildInputParser(inParser)
+    args = inParser.parse_args()
+    queryList.extend(mapArgsserToGlobal(args))
 
     finputfile = gConfig.fnameInput
-    try:
-        infile = open(finputfile, 'r')
-        queryList = tokens(infile)
+    if gConfig.useInput:
+        consoleStatus('Getting search tokens...')
+        try:
+            infile = open(finputfile, 'r')
+            queryList.extend(tokens(infile))
+
+        except IOError:
+            print ("IOError: Cannot open", sys.argv[0], "<input file>")
 
 
-        consoleStatus('Logging in...')
-        rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
+    consoleStatus('Logging in...')
+    rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
 
-        consoleStatus('Query execution...')
+    consoleStatus('Query execution...')
 
-        for queryItem in queryList:
-            if queryItem[:2] == "FE":
-                dataHR.extend (processFEA(rally, queryItem))
-            elif queryItem[:2] == "TF":
-                dataHR.extend (processStory(rally, queryItem))
-            elif queryItem[:2] == "US":
-                #dataHR.extend (processUS(rally, queryItem))
-                dataHR.extend (processStory(rally, queryItem))
-            elif queryItem[:2] == "DE":
-                #dataHR.extend (processDE(rally, queryItem))
-                dataHR.extend (processStory(rally, queryItem))
-            else:
-                print ("Error query for " + queryItem)
+    for queryItem in queryList:
+        if queryItem[:2] == "FE":
+            dataHR.extend (processFEA(rally, queryItem))
+        elif queryItem[:2] == "TF":
+            dataHR.extend (processStory(rally, queryItem))
+        elif queryItem[:2] == "US":
+            dataHR.extend (processStory(rally, queryItem))
+        elif queryItem[:2] == "DE":
+            dataHR.extend (processStory(rally, queryItem))
+        else:
+            print ("Error query for " + queryItem)
 
-        if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
-        if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, outType=gConfig.fnameExceloutType)
-
-    except IOError:
-        print ("IOError: Cannot open", sys.argv[0], "<input file>")
+    if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
+    if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, outType=gConfig.fnameExceloutType)
 
     consoleStatus('Fini')
 
