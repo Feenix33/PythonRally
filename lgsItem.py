@@ -67,6 +67,27 @@ class theConfig:
 
 gConfig = theConfig()
 
+
+def convertIterIDtoLabel(iterID):
+    # convert the short version of the iteration ID to the full version
+    if len(iterID) != 3 and len(iterID) != 8:
+        return iterID
+
+    today = datetime.date.today()
+    iterNum = int(iterID[1:3])
+    if len(iterID) == 3: iterYear = today.year
+    else: iterYear = int(iterID[4:])
+
+    iter1start = datetime.date(2017, 1, 4)
+    iter1end = datetime.date(2017, 1, 17)
+    deltaDays = (iterYear - 2017) * 364 + (iterNum -1)*14
+    iterStart = iter1start + datetime.timedelta(deltaDays)
+    iterEnd = iterStart + datetime.timedelta(13)
+    strIterLabel = ("S{:02d}#2017-{:02d}-{:02d}/{:02d}-{:02d}").format(
+            iterNum, iterStart.month, iterStart.day, iterEnd.month, iterEnd.day)
+    return strIterLabel
+
+
 def processRecord(record):
     return  [getattrError(record, attr) for attr in gFieldnames] 
 
@@ -82,6 +103,21 @@ def getattrError(n, attr):
             return getattr( getattr(n, attr[:dot]), attr[(dot+1):])
         except AttributeError:
             return str(gConfig.strNoExist)
+
+def processIteration(instRally, nameIter):
+    records = []
+    entityList = ['HierarchicalRequirement', 'Defect']
+    #entityName = 'Defect'
+    queryString = 'Iteration.Name = "' + convertIterIDtoLabel(nameIter[2:]) + '"'
+
+    for entityName in entityList:
+        response = instRally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
+        #response = gRally.get(queryItem, fetch=True, projectScopeDown=True, query=gblIteration) 
+
+        consoleStatus ("   " + queryString + "    Count = " + str(response.resultCount))
+        for story in response:
+            records.append( processRecord( story ))
+    return records
 
 def processFEA(instRally, feaID):
     entityName = 'PortfolioItem'
@@ -101,15 +137,15 @@ def processFEA(instRally, feaID):
 def processStory(instRally, storyID): # story is user story or defect or TF
     records = []
     if storyID[0] == "U":
-        entity_name = 'HierarchicalRequirement'
+        entityName = 'HierarchicalRequirement'
         queryString = 'FormattedID = "' + storyID + '"'
     elif storyID[0] == "D":
-        entity_name = 'Defect'
+        entityName = 'Defect'
         queryString = 'FormattedID = "' + storyID + '"'
     else:
-        entity_name = 'HierarchicalRequirement'
+        entityName = 'HierarchicalRequirement'
         queryString = 'Feature.FormattedID = "' + storyID + '"'
-    response = instRally.get(entity_name, fetch=True, projectScopeDown=True, query=queryString)
+    response = instRally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
     consoleStatus ("   " + queryString + "    Count = " + str(response.resultCount))
     for story in response:
         records.append( processRecord( story ))
@@ -237,12 +273,13 @@ def main():
             dataHR.extend (processStory(rally, queryItem))
         elif queryItem[:2] == "DE":
             dataHR.extend (processStory(rally, queryItem))
+        elif queryItem[:2] == "IT":
+            dataHR.extend (processIteration(rally, queryItem))
         else:
             print ("Error query for " + queryItem)
 
     if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
     if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, outType=gConfig.fnameExceloutType)
-
     consoleStatus('Fini')
 
 
