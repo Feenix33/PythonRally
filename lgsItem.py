@@ -27,6 +27,7 @@ from openpyxl import Workbook
 
  Get tasks if asked for user stories and defects
  ini/yaml config file
+ Better excel file creation - separation on workbooks by query token?
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
  Error handling
    search not found
@@ -104,11 +105,12 @@ def getattrError(n, attr):
         except AttributeError:
             return str(gConfig.strNoExist)
 
-def processIteration(instRally, nameIter):
+def processIteration(instRally, nameIter, queryToken):
     records = []
     entityList = ['HierarchicalRequirement', 'Defect']
     #entityName = 'Defect'
-    queryString = 'Iteration.Name = "' + convertIterIDtoLabel(nameIter[2:]) + '"'
+    fullIterationName = convertIterIDtoLabel(nameIter[2:])
+    queryString = 'Iteration.Name = "' + fullIterationName + '"'
 
     for entityName in entityList:
         response = instRally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
@@ -116,25 +118,25 @@ def processIteration(instRally, nameIter):
 
         consoleStatus ("   " + queryString + "    Count = " + str(response.resultCount))
         for story in response:
-            records.append( processRecord( story ))
+            records.append( processRecord( story ) + [queryToken[2:]]) #xx
     return records
 
-def processFEA(instRally, feaID):
+def processFEA(instRally, feaID, queryToken):
     entityName = 'PortfolioItem'
     queryString = 'FormattedID = "' + feaID + '"'
     response = instRally.get(entityName, fetch=True, projectScopeUp=True, query=queryString)
     records = []
     for ppmFeature in response:
-        records.append( [getattrError(ppmFeature, attr) for attr in gPPMFieldnames] )
+        records.append( [getattrError(ppmFeature, attr) for attr in gPPMFieldnames] + [queryToken])
         if ppmFeature.DirectChildrenCount > 0 and hasattr(ppmFeature, 'Children'):
             for teamfeature in ppmFeature.Children:
                 # add the team feature to the data table
-                records.append( [getattrError(teamfeature, attr) for attr in gPPMFieldnames] )
+                records.append( [getattrError(teamfeature, attr) for attr in gPPMFieldnames] + [queryToken])
                 # add the subsequent children
-                records.extend( processStory(instRally, teamfeature.FormattedID))
+                records.extend( processStory(instRally, teamfeature.FormattedID, queryToken))
     return records 
 
-def processStory(instRally, storyID): # story is user story or defect or TF
+def processStory(instRally, storyID, queryToken): # story is user story or defect or TF
     records = []
     if storyID[0] == "U":
         entityName = 'HierarchicalRequirement'
@@ -148,7 +150,7 @@ def processStory(instRally, storyID): # story is user story or defect or TF
     response = instRally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
     consoleStatus ("   " + queryString + "    Count = " + str(response.resultCount))
     for story in response:
-        records.append( processRecord( story ))
+        records.append( processRecord( story ) + [queryToken]) #xx
     return records
 
 
@@ -162,12 +164,42 @@ def tokens(fileobj):
 def writeCSV(listData, fname):
     fout = open(fname, 'wb')
     fwriter = csv.writer(fout, dialect='excel')
-    fwriter.writerow( gFieldnames )
+    fwriter.writerow( gFieldnames + ['Token']) #xx
     fwriter.writerows(listData)
     fout.close()
 
-
 def writeExcel(listData, fname, outType=None):
+    consoleStatus("Writing Excel")
+    wb = Workbook()
+    ws = wb.active
+    queryTokenOld = listData[0][-1]
+    queryToken    = listData[0][-1]
+    #restructure this to get rid of the duplicate by deleting the first sheet
+    #std = workbook.get_sheet_by_name('name')
+    #workbook.remove_sheet(std)
+    ws.title = queryTokenOld.replace('/','|') 
+    if queryToken[0] == 'T' or queryToken[0] == 'F':
+        ws.append(gPPMFieldnames + ['Query Token'])
+    else:
+        ws.append(gFieldnames + ['Query Token'])
+
+    for record in listData:
+        queryToken = record[-1]
+        if queryToken != queryTokenOld:
+            if not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D')):
+                sheetTitle = queryToken.replace('/','|') #excel no like slash
+                ws = wb.create_sheet(sheetTitle)
+                queryTokenOld = queryToken
+                if queryToken[0] == 'T' or queryToken[0] == 'F':
+                    ws.append(gPPMFieldnames + ['Query Token'])
+                else:
+                    ws.append(gFieldnames + ['Query Token'])
+        ws.append(record)
+    wb.save(fname)
+
+
+
+def OLDwriteExcel(listData, fname, outType=None):
     consoleStatus("Writing Excel")
     wb = Workbook()
     ws = wb.active
@@ -175,14 +207,14 @@ def writeExcel(listData, fname, outType=None):
     #wsB = wb.create_sheet("Bravo")
 
     if not outType or outType <= 0 or outType > 2:
-        ws.append(gFieldnames)
+        ws.append(gFieldnames + ['Token']) #xx
         for row in listData:
             ws.append(row)
     elif outType == 1:
         ws.title = "User Stories"
         wsPPM = wb.create_sheet("PPM Items")
-        ws.append(gFieldnames)
-        wsPPM.append(gPPMFieldnames)
+        ws.append(gFieldnames + ['Token']) #xx
+        wsPPM.append(gPPMFieldnames+ ['Token']) #xx
         for row in listData:
             if row[0][0] == "U" or row[0][0] == "D":
                 ws.append(row)
@@ -190,12 +222,12 @@ def writeExcel(listData, fname, outType=None):
                 wsPPM.append(row)
     else: #outType == 2: new sheet for each FEA encountered
         ws.title = "User Stories"
-        ws.append(gFieldnames)
+        ws.append(gFieldnames + ['Token']) #xx
         wsUsing = ws
         for row in listData:
             if row[0][0] == "F":
                 wsUsing = wb.create_sheet(row[0])
-                wsUsing.append(gFieldnames)
+                wsUsing.append(gFieldnames + ['Token']) #xx
             wsUsing.append(row)
 
     wb.save(fname)
@@ -266,15 +298,15 @@ def main():
 
     for queryItem in queryList:
         if queryItem[:2] == "FE":
-            dataHR.extend (processFEA(rally, queryItem))
+            dataHR.extend (processFEA(rally, queryItem, queryItem))
         elif queryItem[:2] == "TF":
-            dataHR.extend (processStory(rally, queryItem))
+            dataHR.extend (processStory(rally, queryItem, queryItem))
         elif queryItem[:2] == "US":
-            dataHR.extend (processStory(rally, queryItem))
+            dataHR.extend (processStory(rally, queryItem, queryItem))
         elif queryItem[:2] == "DE":
-            dataHR.extend (processStory(rally, queryItem))
+            dataHR.extend (processStory(rally, queryItem, queryItem))
         elif queryItem[:2] == "IT":
-            dataHR.extend (processIteration(rally, queryItem))
+            dataHR.extend (processIteration(rally, queryItem, queryItem))
         else:
             print ("Error query for " + queryItem)
 
