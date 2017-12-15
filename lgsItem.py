@@ -61,6 +61,7 @@ class theConfig:
         self.fnameCSV = "lgsItem.csv"
         self.fnameExcel = "lgsItem.xlsx"
         self.fnameExceloutType = 0
+        self.singleExcel = False
         self.fnameInput = 'in.txt'
         self.strNoExist = "--"
         self.useInput = True
@@ -160,77 +161,47 @@ def tokens(fileobj):
             for word in line.split():
                 yield word
 
+def getHeadList(ppmType=None):
+    #return the header items to write in csv or xlsx
+    if ppmType: return (gPPMFieldnames + ['QueryToken'])
+    else: return (gFieldnames + ['QueryToken'])
 
 def writeCSV(listData, fname):
     fout = open(fname, 'wb')
     fwriter = csv.writer(fout, dialect='excel')
-    fwriter.writerow( gFieldnames + ['Token']) #xx
+    fwriter.writerow( getHeadList() )
     fwriter.writerows(listData)
     fout.close()
 
-def writeExcel(listData, fname, outType=None):
+def writeExcel(listData, fname, singleSheet):
     consoleStatus("Writing Excel")
-    wb = Workbook()
-    ws = wb.active
-    queryTokenOld = listData[0][-1]
+    workbook = Workbook()
+    ws = workbook.active
+    queryTokenOld = "0None"
     queryToken    = listData[0][-1]
-    #restructure this to get rid of the duplicate by deleting the first sheet
-    #std = workbook.get_sheet_by_name('name')
-    #workbook.remove_sheet(std)
-    ws.title = queryTokenOld.replace('/','|') 
-    if queryToken[0] == 'T' or queryToken[0] == 'F':
-        ws.append(gPPMFieldnames + ['Query Token'])
-    else:
-        ws.append(gFieldnames + ['Query Token'])
+
+    if singleSheet:
+        ws = workbook.create_sheet("Output")
+        ws.append(gFieldnames + ['QueryToken'])
 
     for record in listData:
         queryToken = record[-1]
         if queryToken != queryTokenOld:
-            if not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D')):
+            if not singleSheet and (not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'))):
                 sheetTitle = queryToken.replace('/','|') #excel no like slash
-                ws = wb.create_sheet(sheetTitle)
+                #error need to check for duplicated sheet name
+                ws = workbook.create_sheet(sheetTitle)
                 queryTokenOld = queryToken
                 if queryToken[0] == 'T' or queryToken[0] == 'F':
-                    ws.append(gPPMFieldnames + ['Query Token'])
+                    ws.append( getHeadList(True) )
                 else:
-                    ws.append(gFieldnames + ['Query Token'])
+                    ws.append( getHeadList() )
         ws.append(record)
-    wb.save(fname)
+    #get rid of the initial sheet
+    std = workbook.get_sheet_by_name('Sheet')
+    workbook.remove_sheet(std)
+    workbook.save(fname)
 
-
-
-def OLDwriteExcel(listData, fname, outType=None):
-    consoleStatus("Writing Excel")
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Rally Output"
-    #wsB = wb.create_sheet("Bravo")
-
-    if not outType or outType <= 0 or outType > 2:
-        ws.append(gFieldnames + ['Token']) #xx
-        for row in listData:
-            ws.append(row)
-    elif outType == 1:
-        ws.title = "User Stories"
-        wsPPM = wb.create_sheet("PPM Items")
-        ws.append(gFieldnames + ['Token']) #xx
-        wsPPM.append(gPPMFieldnames+ ['Token']) #xx
-        for row in listData:
-            if row[0][0] == "U" or row[0][0] == "D":
-                ws.append(row)
-            else:
-                wsPPM.append(row)
-    else: #outType == 2: new sheet for each FEA encountered
-        ws.title = "User Stories"
-        ws.append(gFieldnames + ['Token']) #xx
-        wsUsing = ws
-        for row in listData:
-            if row[0][0] == "F":
-                wsUsing = wb.create_sheet(row[0])
-                wsUsing.append(gFieldnames + ['Token']) #xx
-            wsUsing.append(row)
-
-    wb.save(fname)
 
 def consoleStatus(message):
     if gConfig.outToConsole: print (message)
@@ -245,7 +216,8 @@ def buildInputParser(parser):
     parser.add_argument("--noxl", action='store_true', default=False, help="Suppress Excel output")
     parser.add_argument("--nocsv", action='store_true', default=False, help="Suppress csv output")
     parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
-    parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
+    #parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
+    parser.add_argument("-xl1", "--xlone", action='store_true', default=False, help="Excel file output as single sheet")
     parser.add_argument('baz',default=[], nargs='*', help="Parameters to search for")
 
 def mapArgsserToGlobal(args):
@@ -311,7 +283,7 @@ def main():
             print ("Error query for " + queryItem)
 
     if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
-    if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, outType=gConfig.fnameExceloutType)
+    if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, gConfig.singleExcel)
     consoleStatus('Fini')
 
 
