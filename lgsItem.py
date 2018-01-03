@@ -228,7 +228,10 @@ def mapArgsserToGlobal(args):
     gConfig.writeCSV = True
 
     if args.xl == 1: gConfig.fnameExcel = "lgsItem.xlsx"
-    else: gConfig.fnameExcel = args.xl
+    else: 
+        gConfig.fnameExcel = args.xl
+        if gConfig.fnameExcel[-5:] != '.xlsx': gConfig.fnameExcel += '.xlsx'
+
 
     if args.csv == 1: gConfig.fnameCSV = "lgsItem.csv"
     else: gConfig.fnameCSV = args.csv
@@ -237,7 +240,7 @@ def mapArgsserToGlobal(args):
     if args.nocsv: gConfig.writeCSV = False
 
     gConfig.strNoExist = args.nastring[0]
-    gConfig.fnameExceloutType = args.xltype
+    #gConfig.fnameExceloutType = args.xltype
     gConfig.useInput = not args.noinput
     #print (args)
     return args.baz
