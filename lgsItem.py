@@ -24,10 +24,10 @@ from openpyxl import Workbook
 .excel page per FEA
 .Consolidate query routines
 .Commnand line switches
+.Better excel file creation - separation on workbooks by query token?
 
  Get tasks if asked for user stories and defects
  ini/yaml config file
- Better excel file creation - separation on workbooks by query token?
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
  Error handling
    search not found
@@ -35,6 +35,7 @@ from openpyxl import Workbook
    incorrect ini
    unknown flags
    upper/lowercase
+Defects
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 .input file
 .screen status or silent
@@ -61,7 +62,7 @@ class theConfig:
         self.fnameCSV = "lgsItem.csv"
         self.fnameExcel = "lgsItem.xlsx"
         self.fnameExceloutType = 0
-        self.singleExcel = False
+        self.singleExcel = True
         self.fnameInput = 'in.txt'
         self.strNoExist = "--"
         self.useInput = True
@@ -85,8 +86,8 @@ def convertIterIDtoLabel(iterID):
     deltaDays = (iterYear - 2017) * 364 + (iterNum -1)*14
     iterStart = iter1start + datetime.timedelta(deltaDays)
     iterEnd = iterStart + datetime.timedelta(13)
-    strIterLabel = ("S{:02d}#2017-{:02d}-{:02d}/{:02d}-{:02d}").format(
-            iterNum, iterStart.month, iterStart.day, iterEnd.month, iterEnd.day)
+    strIterLabel = ("S{:02d}#{:04d}-{:02d}-{:02d}/{:02d}-{:02d}").format(
+            iterNum, iterYear, iterStart.month, iterStart.day, iterEnd.month, iterEnd.day)
     return strIterLabel
 
 
@@ -174,6 +175,11 @@ def writeCSV(listData, fname):
     fout.close()
 
 def writeExcel(listData, fname, singleSheet):
+    #check if no data
+    if len(listData) == 0 or len(listData[0]) == 0:
+        consoleStatus("No data to write")
+        return
+
     consoleStatus("Writing Excel")
     workbook = Workbook()
     ws = workbook.active
@@ -187,15 +193,16 @@ def writeExcel(listData, fname, singleSheet):
     for record in listData:
         queryToken = record[-1]
         if queryToken != queryTokenOld:
-            if not singleSheet and (not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'))):
-                sheetTitle = queryToken.replace('/','|') #excel no like slash
-                #error need to check for duplicated sheet name
-                ws = workbook.create_sheet(sheetTitle)
-                queryTokenOld = queryToken
-                if queryToken[0] == 'T' or queryToken[0] == 'F':
-                    ws.append( getHeadList(True) )
-                else:
-                    ws.append( getHeadList() )
+            if (not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'))):
+                if not singleSheet:
+                    sheetTitle = queryToken.replace('/','|') #excel no like slash
+                    #error need to check for duplicated sheet name
+                    ws = workbook.create_sheet(sheetTitle)
+                    queryTokenOld = queryToken
+                    if queryToken[0] == 'T' or queryToken[0] == 'F':
+                        ws.append( getHeadList(True) )
+                    else:
+                        ws.append( getHeadList() )
         ws.append(record)
     #get rid of the initial sheet
     std = workbook.get_sheet_by_name('Sheet')
@@ -212,12 +219,12 @@ def buildInputParser(parser):
     parser.add_argument("-noi", "--noinput", default=False, action="store_true", help="No input file")
     parser.add_argument("-q", "--quiet", action="store_true", help="No console messages")
     parser.add_argument("-c", "--csv", nargs='?', const=1, type=str, default='out.csv', help="Write a .csv output")
-    parser.add_argument("-x", "--xl", nargs='?', const=1, type=str, default='out.xlsx', help="Write a Excel output")
+    parser.add_argument("-x", "-xl", "--excel", nargs='?', const=1, type=str, default='out.xlsx', help="Write a Excel output")
     parser.add_argument("--noxl", action='store_true', default=False, help="Suppress Excel output")
     parser.add_argument("--nocsv", action='store_true', default=False, help="Suppress csv output")
     parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
     #parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
-    parser.add_argument("-xl1", "--xlone", action='store_true', default=False, help="Excel file output as single sheet")
+    parser.add_argument("-xl1", "--xlone", action='store_true', default=True, help="Excel file output as single sheet")
     parser.add_argument('baz',default=[], nargs='*', help="Parameters to search for")
 
 def mapArgsserToGlobal(args):
@@ -227,9 +234,9 @@ def mapArgsserToGlobal(args):
     gConfig.writeExcel = True
     gConfig.writeCSV = True
 
-    if args.xl == 1: gConfig.fnameExcel = "lgsItem.xlsx"
+    if args.excel == 1: gConfig.fnameExcel = "lgsItem.xlsx"
     else: 
-        gConfig.fnameExcel = args.xl
+        gConfig.fnameExcel = args.excel
         if gConfig.fnameExcel[-5:] != '.xlsx': gConfig.fnameExcel += '.xlsx'
 
 
@@ -238,6 +245,8 @@ def mapArgsserToGlobal(args):
 
     if args.noxl: gConfig.writeExcel = False
     if args.nocsv: gConfig.writeCSV = False
+
+    gConfig.singleExcel = args.xlone
 
     gConfig.strNoExist = args.nastring[0]
     #gConfig.fnameExceloutType = args.xltype
@@ -265,7 +274,6 @@ def main():
         except IOError:
             print ("IOError: Cannot open", sys.argv[0], "<input file>")
 
-
     consoleStatus('Logging in...')
     rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
 
@@ -284,6 +292,7 @@ def main():
             dataHR.extend (processIteration(rally, queryItem, queryItem))
         else:
             print ("Error query for " + queryItem)
+
 
     if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
     if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, gConfig.singleExcel)
