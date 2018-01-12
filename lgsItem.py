@@ -11,38 +11,11 @@ from openpyxl import Workbook
 
 """
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
-.Process FEA TF US
-.Output the hierarchy
-.User Story and defect processing
-.Generic query
-.Query from input file
-.Input file with ignore
-.Restructure output to have separate modules to write rather than as you go
-.Add excel output
-.what globals should be global
-.should globals be in a structure
-.excel page per FEA
-.Consolidate query routines
-.Commnand line switches
-.Better excel file creation - separation on workbooks by query token?
-
- Get tasks if asked for user stories and defects
- ini/yaml config file
----- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
- Error handling
+Missing Error handling
    search not found
    files not opening
-   incorrect ini
    unknown flags
    upper/lowercase
-Defects
----- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
-.input file
-.screen status or silent
-.excel or csv
-.output filename
-.not found string
- tasks or not for all or only explicit us/de
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 """
 
@@ -57,6 +30,7 @@ gPPMFieldnames = ['FormattedID', 'Name', 'LeafStoryPlanEstimateTotal', 'Parent.F
 class theConfig:
     def __init__(self):
         self.outToConsole = True
+
         self.writeCSV = True
         self.writeExcel = True
         self.fnameCSV = "lgsItem.csv"
@@ -66,17 +40,29 @@ class theConfig:
         self.fnameInput = 'in.txt'
         self.strNoExist = "--"
         self.useInput = True
+        self.logging = True
+        self.logFile = None
+        self.logFilename = 'log.txt'
+        self.currentIteration = False
 
 
 gConfig = theConfig()
 
 
+# converting to current for 2018
+# int( (target - 20dec2017) /14)
 def convertIterIDtoLabel(iterID):
+    today = datetime.date.today()
+
+    #check if current iteration
+    if iterID == 'Now':
+        magicDate = datetime.date(2017, 12, 20)
+        iterID = ("S{:02d}").format (int ((today - magicDate).days) / 14)
+
     # convert the short version of the iteration ID to the full version
-    if len(iterID) != 3 and len(iterID) != 8:
+    elif len(iterID) != 3 and len(iterID) != 8:
         return iterID
 
-    today = datetime.date.today()
     iterNum = int(iterID[1:3])
     if len(iterID) == 3: iterYear = today.year
     else: iterYear = int(iterID[4:])
@@ -193,7 +179,8 @@ def writeExcel(listData, fname, singleSheet):
     for record in listData:
         queryToken = record[-1]
         if queryToken != queryTokenOld:
-            if (not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'))):
+            #if (not ((queryToken[0] == 'U' or queryToken[0] == 'D') and (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'))):
+            if not (queryTokenOld[0] == 'U' or queryTokenOld[0] == 'D'):
                 if not singleSheet:
                     sheetTitle = queryToken.replace('/','|') #excel no like slash
                     #error need to check for duplicated sheet name
@@ -209,6 +196,14 @@ def writeExcel(listData, fname, singleSheet):
     workbook.remove_sheet(std)
     workbook.save(fname)
 
+def logOpen():
+    if gConfig.logging: gConfig.logFile = open(gConfig.logFilename, 'w')
+
+def log(message):
+    if gConfig.logging: gConfig.logFile.write (message)
+
+def logClose():
+    if gConfig.logFile: gConfig.logFile.close()
 
 def consoleStatus(message):
     if gConfig.outToConsole: print (message)
@@ -224,7 +219,8 @@ def buildInputParser(parser):
     parser.add_argument("--nocsv", action='store_true', default=False, help="Suppress csv output")
     parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
     #parser.add_argument("--xltype", nargs='?', const=1, type=int, default=1, help="Excel file output format")
-    parser.add_argument("-xl1", "--xlone", action='store_true', default=True, help="Excel file output as single sheet")
+    parser.add_argument("-xl1", "--xlone", action='store_true', default=False, help="Excel file output as single sheet")
+    parser.add_argument("-it", "--iter", action='store_true', default=False, help="Just do the current iteration")
     parser.add_argument('baz',default=[], nargs='*', help="Parameters to search for")
 
 def mapArgsserToGlobal(args):
@@ -250,8 +246,14 @@ def mapArgsserToGlobal(args):
 
     gConfig.strNoExist = args.nastring[0]
     #gConfig.fnameExceloutType = args.xltype
-    gConfig.useInput = not args.noinput
-    #print (args)
+    if (len(args.baz) > 0): gConfig.useInput = False
+    else: gConfig.useInput = not args.noinput
+
+    if args.iter: # we are just going to do the current iteration, cancel the other inputs
+        gConfig.currentIteration = True
+        gConfig.useInput = False
+        args.baz = ['ITNow']
+
     return args.baz
 
 
@@ -264,6 +266,12 @@ def main():
     args = inParser.parse_args()
     queryList.extend(mapArgsserToGlobal(args))
 
+    logOpen()
+
+    attrs = vars(gConfig)
+    for item in attrs.items(): log( "CONFIG %s: %s\n" % item)
+    log("-"*60+'\n')
+
     finputfile = gConfig.fnameInput
     if gConfig.useInput:
         consoleStatus('Getting search tokens...')
@@ -274,11 +282,14 @@ def main():
         except IOError:
             print ("IOError: Cannot open", sys.argv[0], "<input file>")
 
+
+    for queryItem in queryList: log('QUERY. {0}\n'.format(str(queryItem)))
+    log("-"*60+'\n')
+
     consoleStatus('Logging in...')
     rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
 
     consoleStatus('Query execution...')
-
     for queryItem in queryList:
         if queryItem[:2] == "FE":
             dataHR.extend (processFEA(rally, queryItem, queryItem))
@@ -296,7 +307,9 @@ def main():
 
     if gConfig.writeCSV: writeCSV(dataHR, gConfig.fnameCSV)
     if gConfig.writeExcel: writeExcel(dataHR, gConfig.fnameExcel, gConfig.singleExcel)
+
     consoleStatus('Fini')
+    logClose()
 
 
 
