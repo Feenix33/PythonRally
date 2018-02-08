@@ -280,6 +280,7 @@ def mapArgsserToGlobal(args):
             gConfig.previousIteration = True
             args.baz.append('ITPre')
 
+    if len(args.baz) > 0: gConfig.useInput = False
     return args.baz
 
 
@@ -308,7 +309,6 @@ def main():
         except IOError:
             print ("IOError: Cannot open", sys.argv[0], "<input file>")
 
-
     for queryItem in queryList: log('QUERY. {0}\n'.format(str(queryItem)))
     log("-"*60+'\n')
 
@@ -317,6 +317,7 @@ def main():
 
     consoleStatus('Query execution...')
     for queryItem in queryList:
+        log("QUERY: %s\n" % queryItem)
         if queryItem[:2] == "FE":
             dataHR.extend (processFEA(rally, queryItem, queryItem))
         elif queryItem[:2] == "PR":
@@ -338,7 +339,6 @@ def main():
 
     consoleStatus('Fini')
     logClose()
-
 
 
 if __name__ == '__main__':
