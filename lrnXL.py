@@ -9,6 +9,8 @@ lrnXL Excel experiments tied to Test1.xlsx
 07 - Add Summary sheet to existing XL (at least 27 times ;-)
 08 - Write summary (Combine 06 and 07) but using helper functions
 09 - Append original data set and keep 08 experiment
+
+Renamed this file to ppIteration
 """
 
 from openpyxl import Workbook
