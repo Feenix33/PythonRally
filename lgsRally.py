@@ -13,8 +13,7 @@ from openpyxl import Workbook
 """
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 Features to add
-   remove config and use args?
-   cmd -nx -it -c Erase # did not run, looking for input file, overzealous cmd line removal
+   remove config and use args only?
 
 Missing Error handling
    search not found
@@ -38,8 +37,8 @@ class theConfig:
 
         self.writeCSV = True
         self.writeExcel = True
-        self.fnameCSV = "lgsItem.csv"
-        self.fnameExcel = "lgsItem.xlsx"
+        self.fnameCSV = "out.csv"
+        self.fnameExcel = "out.xlsx"
         self.fnameExceloutType = 0
         self.singleExcel = True
         self.fnameInput = 'in.txt'
@@ -234,12 +233,13 @@ def buildInputParser(parser):
     parser.add_argument("-i", "--infile", type=argparse.FileType('r'), default='in.txt',
             help="input file with search parameters")
     parser.add_argument("-q", "--quiet", action="store_true", help="No console messages")
-    parser.add_argument("-c", "--csv", nargs='?', const=1, type=str, default='out.csv', help="Write a .csv output")
+    parser.add_argument("-c", "--csv", nargs='?', const=1, type=str, default='', help="Write a .csv output, default=out.csv")
     parser.add_argument("-x", "-xl", "--excel", nargs='?', const=1, type=str, default='out.xlsx', help="Write a Excel output")
+    parser.add_argument("-l", "--log", action="store_true", help="Turn on logging")
+    parser.add_argument("-d", "--daily", action="store_true", help="Do the daily extract")
     parser.add_argument("-nx", "--noxl", action='store_true', default=False, help="Suppress Excel output")
-    parser.add_argument("-nc", "--nocsv", action='store_true', default=False, help="Suppress csv output")
-    parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty")
-    parser.add_argument("-xl1", "--xlone", action='store_true', default=False, help="Excel file output as single sheet")
+    parser.add_argument("-na", "--nastring", nargs=1, type=str, default="xx", help="String for empty, default='xx'")
+    parser.add_argument("-x1", "--xlone", action='store_true', default=False, help="Excel file output as single sheet")
     parser.add_argument("-it", "--iter", action='store_true', default=False, help="Just do the current iteration")
     parser.add_argument("-i2", "--iter2", action='store_true', default=False, help="Do the current and previous iteration")
     parser.add_argument("-ad", "--adddate", action='store_true', default=False, help="Add the date to the filename")
@@ -250,19 +250,26 @@ def mapArgsserToGlobal(args):
     gConfig.outToConsole = not args.quiet
     gConfig.fnameInput = args.infile.name
     gConfig.writeExcel = True
-    gConfig.writeCSV = True
+    gConfig.logging = args.log # logging control
 
-    if args.excel == 1: gConfig.fnameExcel = "lgsItem.xlsx"
+    if args.daily:
+        args.iter = True
+        args.adddate = True
+        args.excel  = "pyRallyLGS.xlsx"
+
+    if args.excel == 1: gConfig.fnameExcel = "out.xlsx"
     else: 
         gConfig.fnameExcel = args.excel
         if gConfig.fnameExcel[-5:] != '.xlsx': gConfig.fnameExcel += '.xlsx'
 
-
-    if args.csv == 1: gConfig.fnameCSV = "lgsItem.csv"
-    else: gConfig.fnameCSV = args.csv
+    gConfig.writeCSV = True
+    if args.csv == "": gConfig.writeCSV = False
+    elif args.csv == 1: gConfig.fnameCSV = "out.csv"
+    else: 
+        gConfig.fnameCSV = args.csv
+        if gConfig.fnameCSV[-4:] != '.csv': gConfig.fnameCSV += '.csv'
 
     if args.noxl: gConfig.writeExcel = False
-    if args.nocsv: gConfig.writeCSV = False
 
     gConfig.singleExcel = args.xlone
 
