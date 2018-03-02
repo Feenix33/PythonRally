@@ -13,6 +13,7 @@ from openpyxl import Workbook
 """
 ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 Features to add
+   add tags
    remove config and use args only?
 
 Missing Error handling
@@ -25,7 +26,7 @@ Missing Error handling
 
 
 gFieldnames = ['FormattedID', 'Name', 'PlanEstimate', 'TeamFeature.FormattedID', 'TeamFeature.Name',
-                        'ScheduleState', 'Project.Name', 'Iteration.Name', 'Owner.Name', 'CreationDate']
+                        'ScheduleState', 'Project.Name', 'Iteration.Name', 'Owner.Name', 'CreationDate', 'Tags']
 gPPMFieldnames = ['FormattedID', 'Name', 'LeafStoryPlanEstimateTotal', 'Parent.FormattedID', 'Parent.Name', 
                         'LeafStoryCount', 'AcceptedLeafStoryPlanEstimateTotal', 'AcceptedLeafStoryCount', 'Owner.Name', 'CreationDate']
 
@@ -92,6 +93,8 @@ def processRecord(record):
 
  
 def getattrError(n, attr):
+    if attr == 'Tags':
+        return ('|'.join([i.Name for i in n.Tags]))
     try:
         return getattr(n, attr)
     except AttributeError:
