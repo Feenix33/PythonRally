@@ -1,4 +1,4 @@
-#!C:\Python27\python.exe
+#!python3
 from __future__ import print_function
 import os
 import sys
@@ -63,12 +63,12 @@ def convertIterIDtoLabel(iterID):
     #check if current iteration
     if iterID == 'Now':
         magicDate = datetime.date(2017, 12, 20)
-        iterID = ("S{:02d}").format (int ((today - magicDate).days) / 14)
+        iterID = ("S{:02d}").format (int (((today - magicDate).days) / 14))
 
     #check if previous iteration
     if iterID == 'Pre':
         magicDate = datetime.date(2017, 12, 20)
-        iterID = ("S{:02d}").format (int ((today - datetime.timedelta(days=14) - magicDate).days) / 14)
+        iterID = ("S{:02d}").format (int (((today - datetime.timedelta(days=14) - magicDate).days) / 14))
 
     # convert the short version of the iteration ID to the full version
     elif len(iterID) != 3 and len(iterID) != 8:
@@ -205,8 +205,10 @@ def writeExcel(listData, fname, singleSheet):
                         ws.append( getHeadList() )
         ws.append(record)
     #get rid of the initial sheet
-    std = workbook.get_sheet_by_name('Sheet')
-    workbook.remove_sheet(std)
+    #std = workbook.get_sheet_by_name('Sheet') #changing for deprecated function call
+    #workbook.remove_sheet(std)
+    std = workbook['Sheet']
+    workbook.remove(std)
     workbook.save(fname)
 
 def logOpen():
