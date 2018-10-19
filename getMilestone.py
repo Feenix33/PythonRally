@@ -8,6 +8,26 @@ import csv
 
 errout = sys.stderr.write
 
+gFields = [ #"FormattedID",
+        "Name", 
+        "Project.Name",
+        "PlanEstimate",
+        "ScheduleState",
+        "Iteration.Name",
+        "LeafStoryCount",
+        "AcceptedLeafStoryCount",
+        "UnEstimatedLeafStoryCount",
+        "LeafStoryPlanEstimateTotal",
+        "AcceptedLeafStoryPlanEstimateTotal",
+        ]
+
+def returnAttrib(item, attr, default=""):
+    locAttr = attr.split('.')
+    if len(locAttr) == 1:
+        return getattr(item, locAttr[0], default)
+    else:
+        return getattr(getattr(item, locAttr[0], ""), locAttr[1], default)
+
 def printHelp():
     print ("USAGE: getMilestone [-s] [-h] <milestone>")
     print ("    <milestone>   Use only the number 'TN-Hotel' is added")
@@ -52,7 +72,6 @@ def main(args):
         else:
             entityName = 'PortfolioItem'
 
-        #queryString = 'FormattedID = "%s"' % arg
         queryString = 'Milestones.Name contains "%s"' % ("TN-Hotel "+arg)
         print ("Query = ", queryString)
         response = rally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
@@ -64,56 +83,30 @@ def main(args):
             print ("Printing to '%s'" % fileName)
             with open (fileName, 'w', newline='') as csvfile:
                 outfile = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                outfile.writerow(["Type", "FEA", "TF", "US", "Name", "Project",
-                            "LeafStoryCount",
-                            "AcceptedLeafStoryCount",
-                            "UnEstimatedLeafStoryCount",
-                            "LeafStoryPlanEstimateTotal",
-                            "AcceptedLeafStoryPlanEstimateTotal",
-                            "PlanEstimate",
-                            "ScheduleState",
-                            "Iteration",
-                            "Tags"
-                            ])
+                outrow = ["Type", "FEA.ID", "TF.ID", "US.ID"] + \
+                        [field for field in gFields] + \
+                        ["Tags"]
+                outfile.writerow(outrow)
+
                 for item in response:
-                    outfile.writerow(["FEA", item.FormattedID, "", "", item.Name, "",
-                        item.LeafStoryCount,
-                        item.AcceptedLeafStoryCount,
-                        item.UnEstimatedLeafStoryCount,
-                        item.LeafStoryPlanEstimateTotal,
-                        item.AcceptedLeafStoryPlanEstimateTotal,
-                        "",
-                        "",
-                        " ".join(tag.Name for tag in item.Tags),
-                        ])
+                    outrow = ["FEA", item.FormattedID, "", "" ] + \
+                        [returnAttrib(item, field, default="") for field in gFields] + \
+                        [" ".join(tag.Name for tag in item.Tags)]
+                    outfile.writerow(outrow)
+
                     if hasattr(item, "Children"):
                         for child in item.Children:
-                            outfile.writerow(["TF",item.FormattedID, child.FormattedID, "", child.Name, 
-                                child.Project.Name,
-                                child.LeafStoryCount,
-                                child.AcceptedLeafStoryCount,
-                                child.UnEstimatedLeafStoryCount,
-                                child.LeafStoryPlanEstimateTotal,
-                                child.AcceptedLeafStoryPlanEstimateTotal,
-                                "",
-                                "",
-                                " ".join(tag.Name for tag in child.Tags),
-                                ])
+                            outrow = ["TF", item.FormattedID, child.FormattedID, "" ] + \
+                                [returnAttrib(child, field, default="") for field in gFields] + \
+                                [" ".join(tag.Name for tag in child.Tags)]
+                            outfile.writerow(outrow)
+
                             if bPrintStories and hasattr(child, "UserStories"):
                                 for story in child.UserStories:
-                                    sIteration = ""
-                                    if hasattr(story, "Iteration"):
-                                        if hasattr(story.Iteration, "Name"):
-                                            sIteration = story.Iteration.Name
-                                    outfile.writerow(["US",item.FormattedID, child.FormattedID, story.FormattedID, story.Name,
-                                        story.Project.Name,
-                                        "","","","","",
-                                        story.PlanEstimate,
-                                        story.ScheduleState,
-                                        sIteration,
-                                        " ".join(tag.Name for tag in story.Tags),
-                                        ])
-
+                                    outrow = ["US", item.FormattedID, child.FormattedID, story.FormattedID ] + \
+                                        [returnAttrib(story, field, default="") for field in gFields] + \
+                                        [" ".join(tag.Name for tag in story.Tags)]
+                                    outfile.writerow(outrow)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
