@@ -1,64 +1,84 @@
 from pyral import Rally, rallySettings, rallyWorkset
 import sys
 import csv
-import operator
 
 
+"""
+"""
 
-gFieldnames = ['FormattedID', 'PlanEstimate', 'ScheduleState',\
-                        'Iteration.Name', 'Project.Name', 'Project.Parent.Name', \
-                        'TeamFeature.FormattedID', 'TeamFeature.Parent.FormattedID']
+gAttribs = [
+        "FormattedID", #"Name",
+        "ScheduleState",
+        "Project.Name",
+        "Project.Parent.Name",
+        "PlanEstimate",
+        "Iteration.Name",
+        "PortfolioItem.FormattedID", #"PortfolioItem.Name",
+        "PortfolioItem.Parent.FormattedID", #"PortfolioItem.Parent.Name",
+        ]
 
-gData = []
+def get_deep_attr(obj, attrs):
+    for attr in attrs.split("."):
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError:
+            return ""
+    return obj
 
-def processRecord(record):
-    return  [getattrAgain(record, attr) for attr in gFieldnames] 
-
- 
-def getattrAgain(n, attr):
+def has_deep_attr(obj, attrs):
     try:
-        return operator.attrgetter(attr)(n)
+        get_deep_attr(obj, attrs)
+        return True
     except AttributeError:
-        return ""
+        return False
 
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+errout = sys.stderr.write
 
 def main(args):
     options = [opt for opt in args if opt.startswith('-')]
     args    = [arg for arg in args if arg not in options]
 
+    #if len(args) != 1:
+    #    errout('ERROR: Wrong number of arguments\n')
+    #    sys.exit(3)
+    #args = ["US504765"] # no TF
+    #args = ["US487422"]  #for Titans
+
     server = 'rally1.rallydev.com'
     apikey = '_LhzUHJ1GQJQWkEYepqIJV9NO96FkErDpQvmHG4WQ'
     workspace = 'Sabre Production Workspace'
     project = 'Sabre' 
-    #project = 'LGS Lodging'
-    project = 'LGS Titans (BLR)'
-    eprint ('Logging in...')
+    project = 'LGS Titans (BLR)' 
+    print ('Logging in...')
     rally = Rally(server, apikey=apikey, workspace=workspace, project=project)
 
-    eprint ('Query execution...')
+    print ('Query execution...')
+    for arg in args:
 
-    queryString = 'Iteration.Name contains "S19#2018"'      # iteration query
-    queryString = 'Iteration.Name contains "2018"'      # iteration query
-    entityName = 'HierarchicalRequirement'
-    eprint ("Query = ", queryString)
-    response = rally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
-    eprint ('Processing responses...')
+        if arg[0] == "D":
+            entityName = 'Defect'
+        elif arg[0] == "U":
+            entityName = 'HierarchicalRequirement'
+        else:
+            entityName = 'PortfolioItem'
 
-    if response.resultCount == 0:
-        eprint('No item found for %s %s\n' % (entityName, arg))
-    else:
-        gData.append(gFieldnames)
-        for item in response:
-            gData.append (processRecord(item))
-        #print (gData)
+        #queryString = 'FormattedID = "%s"' % arg
+        queryString = '(Iteration.StartDate > "2017-12-31")'
+        entityName = 'HierarchicalRequirement'
 
-        # write csv file
-        fout = open('out.csv', 'w', newline='')
-        outputWriter = csv.writer(fout, dialect='excel')
-        outputWriter.writerows (gData)
-        fout.close()
+        print ("Query = ", queryString)
+        response = rally.get(entityName, fetch=True, projectScopeDown=True, query=queryString)
+
+        if response.resultCount == 0:
+            errout('No item found for %s %s\n' % (entityName, arg))
+        else:
+            fileName = 'out.csv'
+            with open (fileName, 'w', newline='') as csvfile:
+                outfile = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                outrow = [field for field in gAttribs] 
+                outfile.writerow(outrow)
+                for item in response:
+                    outfile.writerow( [get_deep_attr(item, param) for param in gAttribs])
 
 
 if __name__ == '__main__':
