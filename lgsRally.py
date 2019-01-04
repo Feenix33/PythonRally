@@ -59,6 +59,7 @@ gConfig = theConfig()
 # int( (target - 20dec2017) /14)
 def convertIterIDtoLabel(iterID):
     today = datetime.date.today()
+    print (iterID, today)
 
     #check if current iteration
     if iterID == 'Now':
@@ -74,17 +75,24 @@ def convertIterIDtoLabel(iterID):
     elif len(iterID) != 3 and len(iterID) != 8:
         return iterID
 
+    print (iterID)
+
     iterNum = int(iterID[1:3])
+    iterNumNew = ((iterNum-1) % 26) + 1
+    iterID = ("S{:02d}").format(iterNumNew) + iterID[4:]
+
+    print (iterID, iterNum)
+
     if len(iterID) == 3: iterYear = today.year
     else: iterYear = int(iterID[4:])
 
-    iter1start = datetime.date(2017, 1, 4)
-    iter1end = datetime.date(2017, 1, 17)
+    iter1start = datetime.date(2017, 1, 5)
+    iter1end = datetime.date(2017, 1, 18)
     deltaDays = (iterYear - 2017) * 364 + (iterNum -1)*14
     iterStart = iter1start + datetime.timedelta(deltaDays)
     iterEnd = iterStart + datetime.timedelta(13)
     strIterLabel = ("S{:02d}#{:04d}-{:02d}-{:02d}/{:02d}-{:02d}").format(
-            iterNum, iterYear, iterStart.month, iterStart.day, iterEnd.month, iterEnd.day)
+            iterNumNew, iterYear, iterStart.month, iterStart.day, iterEnd.month, iterEnd.day)
     return strIterLabel
 
 
